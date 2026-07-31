@@ -1,0 +1,456 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<style>
+  :root{
+    --ground:#0B1F29; --surface:#12303C; --surface2:#17414F; --line:#2A5A6B;
+    --sand:#E9D5A9; --text:#EAF4F7; --muted:#7FA3B0;
+    --q0:#B23A32; --q1:#D4813A; --q2:#7FB069; --q3:#2FB5A0;
+    --kill:#2FB5A0; --err:#B23A32; --live:#8FA8B3; --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  #bv{background:var(--ground);color:var(--text);border-radius:var(--r);
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      padding:16px;display:flex;flex-direction:column;gap:14px;user-select:none}
+  #bv .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  #bv .eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  #bv h2{margin:0;font-size:21px;font-weight:800;letter-spacing:-.03em}
+
+  #bv .bar{display:flex;flex-wrap:wrap;align-items:center;gap:9px;background:var(--surface);
+           border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+  #bv .matchup{font-size:15px;font-weight:800;letter-spacing:-.02em}
+  #bv .matchup em{font-style:normal;color:var(--muted);font-weight:600}
+  #bv .spacer{flex:1}
+  #bv .setsel{display:flex;gap:4px;background:var(--ground);padding:3px;border-radius:9px}
+  #bv .setsel button{border:0;background:transparent;color:var(--muted);font-weight:800;
+                     font-size:13px;padding:6px 12px;border-radius:7px;cursor:pointer}
+  #bv .setsel button.on{background:var(--sand);color:var(--ground)}
+  #bv .ghost{border:1px solid var(--line);background:transparent;color:var(--text);font-size:12px;
+             font-weight:700;padding:8px 11px;border-radius:9px;cursor:pointer}
+  #bv .ghost:active{background:var(--surface2)}
+  #bv .ghost.warn{border-color:var(--err);color:#E9A49E}
+
+  #bv .split{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:900px){#bv .split{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}}
+  #bv .stage,#bv .panel{background:var(--surface);border:1px solid var(--line);
+       border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+
+  /* ---- SIGNATURE: two fixed player columns, left is left all night ---- */
+  #bv .duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #bv .col{display:flex;flex-direction:column;gap:7px;min-width:0}
+  #bv .cap{display:flex;flex-direction:column;gap:1px;padding:0 2px 4px;border-bottom:1px solid var(--line);margin-bottom:2px}
+  #bv .cap b{font-size:19px;font-weight:800;letter-spacing:-.02em}
+  #bv .cap span{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  #bv .cap.on span{color:var(--sand)}
+
+  #bv .btn{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:11px;
+           padding:16px 14px;text-align:left;cursor:pointer;font-size:16px;font-weight:700;
+           letter-spacing:-.01em;line-height:1.2;transition:transform .07s ease}
+  #bv .btn:active{transform:scale(.97)}
+  #bv .btn small{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;
+                 text-transform:uppercase;opacity:.62;margin-top:4px}
+  #bv .btn.kill{background:var(--kill);border-color:var(--kill);color:#07201C}
+  #bv .btn.err{background:var(--err);border-color:var(--err);color:#FFF0EE}
+  #bv .btn.dug{background:transparent;border-color:var(--live);color:var(--live)}
+  #bv .btn.bhe{background:transparent;border-color:var(--err);color:#E9A49E}
+  #bv .wide{width:100%;text-align:center;background:transparent;color:var(--muted);
+            font-size:13px;font-weight:700;padding:12px;border:1px dashed var(--line);border-radius:11px;cursor:pointer}
+
+  #bv .pass{border:0;border-radius:11px;cursor:pointer;color:#08161C;font-weight:800;
+            padding:15px 14px;display:flex;align-items:baseline;gap:9px;transition:transform .07s ease}
+  #bv .pass:active{transform:scale(.97);filter:brightness(1.12)}
+  #bv .pass b{font-size:27px;line-height:1}
+  #bv .pass span{font-size:9px;letter-spacing:.12em;text-transform:uppercase;opacity:.72;font-weight:800}
+  #bv .p0{background:var(--q0);color:#FFF0EE}
+  #bv .p1{background:var(--q1)}#bv .p2{background:var(--q2)}#bv .p3{background:var(--q3)}
+
+  #bv .crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:30px;font-size:12px}
+  #bv .crumb{background:var(--ground);border:1px solid var(--line);padding:5px 10px;border-radius:20px;font-weight:700}
+  #bv .crumb.dim{color:var(--muted);border-style:dashed}
+
+  #bv table{width:100%;border-collapse:collapse;font-size:13px}
+  #bv th,#bv td{padding:5px 4px;text-align:right}
+  #bv th:first-child,#bv td:first-child{text-align:left;color:var(--muted);font-weight:600;font-size:12px}
+  #bv thead th{font-size:14px;font-weight:800;border-bottom:1px solid var(--line);padding-bottom:8px}
+  #bv tr.group td{color:var(--sand);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;padding-top:11px}
+  #bv tr.tot td{border-top:1px solid var(--line);font-weight:800}
+
+  #bv .log{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;-webkit-overflow-scrolling:touch}
+  #bv .entry{display:flex;gap:9px;align-items:center;font-size:12px;background:var(--ground);border-radius:8px;padding:7px 10px}
+  #bv .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  #bv .entry .txt{flex:1}#bv .entry .set{color:var(--muted);font-size:10px;font-weight:700}
+  #bv .empty{color:var(--muted);font-size:13px;padding:16px 0;text-align:center;line-height:1.5}
+
+  #bv .field{display:flex;flex-direction:column;gap:5px}
+  #bv label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  #bv input,#bv select{background:var(--ground);border:1px solid var(--line);color:var(--text);border-radius:9px;
+            padding:11px 12px;font-size:16px;font-family:inherit;font-weight:600;width:100%}
+  #bv input:focus,#bv select:focus{outline:2px solid var(--sand);outline-offset:1px}
+  #bv .fields{display:grid;gap:11px;grid-template-columns:1fr 1fr}
+  #bv .primary{border:0;background:var(--sand);color:var(--ground);font-weight:800;font-size:15px;
+               padding:15px;border-radius:11px;cursor:pointer;width:100%}
+  #bv .primary:active{filter:brightness(.93)}
+  #bv .modal{position:fixed;inset:0;background:rgba(4,14,19,.85);z-index:50;display:flex;
+             align-items:flex-start;justify-content:center;padding:22px 16px;overflow-y:auto}
+  #bv .sheet{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;
+             width:100%;max-width:640px;display:flex;flex-direction:column;gap:14px}
+  #bv textarea{width:100%;height:180px;background:var(--ground);border:1px solid var(--line);color:var(--text);
+               border-radius:9px;padding:11px;font-size:11px;font-family:ui-monospace,Menlo,monospace;white-space:pre}
+  #bv .card{display:flex;align-items:center;gap:11px;background:var(--ground);border:1px solid var(--line);
+            border-radius:11px;padding:12px 13px}
+  #bv .card .who{flex:1;min-width:0}
+  #bv .card .who b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+  #bv .card .who span{font-size:11px;color:var(--muted);font-weight:600}
+  #bv .card.on{border-color:var(--sand)}
+  #bv .flash{animation:fl .4s ease}
+  @keyframes fl{0%{background:var(--sand)}100%{background:var(--surface)}}
+  @media(prefers-reduced-motion:reduce){#bv *{animation:none!important;transition:none!important}}
+</style>
+
+<div id="bv"></div>
+
+<script>
+(function(){
+  const $=document.getElementById('bv');
+  const uid=()=>Math.random().toString(36).slice(2,10);
+
+  const S={matches:[],cur:null,view:'library',set:1,pending:null,sheet:null,draft:null,
+           filter:{player:'',oppo:''}};
+
+  const KEY='bvstat:v2';
+  async function save(){try{if(window.storage)await window.storage.set(KEY,JSON.stringify(
+      {matches:S.matches,cur:S.cur}),false);}catch(e){}}
+  async function load(){try{if(!window.storage)return;const r=await window.storage.get(KEY,false);
+      if(r&&r.value){const d=JSON.parse(r.value);S.matches=d.matches||[];S.cur=d.cur||null;
+        if(S.cur&&M())S.view='collect';}}catch(e){}}
+
+  const M=()=>S.matches.find(m=>m.id===S.cur);
+  const short=p=>'#'+(p.num||'?');
+  const other=k=>k==='a'?'b':'a';
+  const P=k=>M().cfg[k];
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  /* ============ decision tree replayed over the log ============ */
+  const blank=()=>({sr:[0,0,0,0],bhe:0,a2a:0,a2k:0,a2e:0,sw:0,fbk:0,fbe:0,pe:0,pg:0});
+  function tally(rallies){
+    const t={a:blank(),b:blank()};
+    for(const r of rallies){
+      if(r.kind==='oppServeError')continue;
+      const p=t[r.passer],q=t[other(r.passer)];
+      p.sr[r.rating]++;
+      if(r.rating===0){p.pg++;continue;}
+      if(r.second==='bhe'){q.bhe++;q.pg++;}
+      else if(r.second==='option'){q.a2a++;
+        if(r.result==='kill'){q.a2k++;q.pe++;}else if(r.result==='error'){q.a2e++;q.pg++;}}
+      else if(r.second==='attack'){p.sw++;
+        if(r.result==='kill'){p.fbk++;p.pe++;}else if(r.result==='error'){p.fbe++;p.pg++;}}
+    }
+    return t;
+  }
+  const add=(x,y)=>{x.sr=x.sr.map((v,i)=>v+y.sr[i]);
+    ['bhe','a2a','a2k','a2e','sw','fbk','fbe','pe','pg'].forEach(k=>x[k]+=y[k]);return x;};
+
+  /* ============ Master_Data ============ */
+  const HEAD=['Date','School','Pair','Player','Partner','Opponent','Opponent Pair','Final Score',
+    'Sets Won','Sets Lost','Points Earned (+)','Points Given (-)','Total SR Attempts',
+    '0 SR Attempts','1 SR Attempts','2 SR Attempts','3 SR Attempts','SR BHE (2nd Ball)',
+    'SR A2 Attempts','SR A2 Kills','SR A2 Errors','SR FB Swings (3rd Ball)','SR FB Kills (3rd Ball)',
+    'SR FB Errors (3rd Ball)','SR BHE (2nd Ball) (Partner)','SR A2 Attempts (Partner)',
+    'SR A2 Kills (Partner)','SR A2 Errors (Partner)'];
+
+  function record(m){let w=0,l=0;const parts=[];
+    (m.scores||[]).forEach(s=>{const x=String(s).match(/(\d+)\s*[-–]\s*(\d+)/);if(!x)return;
+      parts.push(x[1]+'-'+x[2]);(+x[1]>+x[2])?w++:l++;});
+    return{won:w,lost:l,final:parts.join('; ')};}
+
+  function matchRows(m){
+    const t=tally(m.rallies),rec=record(m),c=m.cfg;
+    const pair=(c.a.num||'?')+'/'+(c.b.num||'?');
+    return['a','b'].map(k=>{const s=t[k],o=t[other(k)],me=c[k],pa=c[other(k)];
+      const tot=s.sr.reduce((x,y)=>x+y,0);
+      return[c.date,c.school,pair,'#'+me.num,'#'+pa.num,c.oppo,c.oppPair,rec.final,rec.won,rec.lost,
+        s.pe,s.pg,tot,s.sr[0],s.sr[1],s.sr[2],s.sr[3],s.bhe,s.a2a,s.a2k,s.a2e,s.sw,s.fbk,s.fbe,
+        o.bhe,o.a2a,o.a2k,o.a2e];});}
+
+  function csv(list){const q=v=>/[",\n]/.test(String(v))?'"'+String(v).replace(/"/g,'""')+'"':String(v);
+    const body=list.flatMap(matchRows);
+    return[HEAD,...body].map(r=>r.map(q).join(',')).join('\n');}
+
+  /* ============ season filter ============ */
+  function players(){const s=new Set();S.matches.forEach(m=>['a','b'].forEach(k=>{
+    if(m.cfg[k].num)s.add('#'+m.cfg[k].num);}));return[...s];}
+  function opponents(){const s=new Set();S.matches.forEach(m=>{if(m.cfg.oppo)s.add(m.cfg.oppo);});return[...s];}
+  function seasonRows(){
+    const f=S.filter,acc={};
+    S.matches.forEach(m=>{
+      if(f.oppo&&m.cfg.oppo!==f.oppo)return;
+      const t=tally(m.rallies);
+      ['a','b'].forEach(k=>{const num='#'+m.cfg[k].num;
+        if(f.player&&num!==f.player)return;
+        const key=num+'|'+(m.cfg[k].name||'');
+        if(!acc[key])acc[key]={num,name:m.cfg[k].name,games:0,st:blank()};
+        acc[key].games++;add(acc[key].st,t[k]);});});
+    return Object.values(acc).sort((x,y)=>y.st.sr.reduce((a,b)=>a+b,0)-x.st.sr.reduce((a,b)=>a+b,0));}
+
+  /* ============ rally entry ============ */
+  function commit(extra){const m=M();
+    m.rallies.push(Object.assign({id:uid(),set:S.set},S.pending,extra));
+    S.pending=null;save();render(true);}
+  function undoLast(){M().rallies.pop();save();render();}
+
+  function describe(m,r){
+    if(r.kind==='oppServeError')return'Opponent missed serve';
+    const p='#'+m.cfg[r.passer].num,q='#'+m.cfg[other(r.passer)].num;
+    if(r.rating===0)return p+' aced';
+    const pass=p+' passed '+r.rating;
+    if(r.second==='bhe')return pass+' · '+q+' handling error';
+    if(r.second==='none')return pass+' · no attack, stayed in play';
+    const who=r.second==='option'?q+' on 2':p+' swings';
+    return pass+' · '+who+' · '+(r.result==='kill'?'kill':r.result==='error'?'error':'dug');}
+  function tone(r){
+    if(r.kind==='oppServeError')return'var(--kill)';
+    if(r.rating===0)return'var(--err)';
+    if(r.result==='kill')return'var(--kill)';
+    if(r.result==='error'||r.second==='bhe')return'var(--err)';
+    return'var(--live)';}
+
+  /* ============================ RENDER ============================ */
+  function render(flash){
+    $.innerHTML = S.view==='library'?library() : S.view==='setup'?setup() : collect();
+    wire();
+    if(flash){const s=$.querySelector('.stage');if(s){s.classList.add('flash');
+      setTimeout(()=>s.classList.remove('flash'),400);}}}
+
+  /* ---- library ---- */
+  function library(){
+    const cards=S.matches.length?S.matches.map(m=>{
+      const n=m.rallies.length,c=m.cfg;
+      return`<div class="card ${m.id===S.cur?'on':''}">
+        <div class="who"><b>${esc(c.a.num?'#'+c.a.num:'?')}/${esc(c.b.num||'?')} vs ${esc(c.oppo||'—')}</b>
+        <span>${esc(c.date)} · ${n} rall${n===1?'y':'ies'}${c.oppPair?' · '+esc(c.oppPair):''}</span></div>
+        <button class="ghost" data-open="${m.id}">Open</button>
+        <button class="ghost warn" data-del="${m.id}">Delete</button></div>`;}).join('')
+      :`<div class="empty">No matches yet.<br>Start one and it stays here for the season.</div>`;
+    return`<div class="panel">
+      <div><div class="eyebrow">Beach volleyball</div><h2>Matches</h2></div>
+      ${cards}
+      <button class="primary" id="newmatch">New match</button>
+      ${S.matches.length?`<div style="display:flex;gap:9px">
+        <button class="ghost" id="season" style="flex:1;padding:13px">Season totals</button>
+        <button class="ghost" id="exportall" style="flex:1;padding:13px">Export spreadsheet</button></div>`:''}
+    </div>
+    ${S.sheet==='season'?seasonSheet():''}${S.sheet==='export'?exportSheet():''}`;}
+
+  /* ---- setup (also used for editing) ---- */
+  function setup(){
+    const d=S.draft,editing=!!d.id,dirty=editing&&(M()&&M().rallies.length);
+    return`<div class="panel">
+      <div><div class="eyebrow">${editing?'Editing':'New match'}</div><h2>${editing?'Match details':'Who is playing?'}</h2></div>
+      ${dirty?`<div class="eyebrow" style="color:#E9A49E">${M().rallies.length} rallies already logged — swapping a number reassigns all of them</div>`:''}
+      <div class="fields">
+        <div class="field"><label>Date</label><input id="f-date" type="date" value="${esc(d.cfg.date)}"></div>
+        <div class="field"><label>Your school</label><input id="f-school" value="${esc(d.cfg.school)}" placeholder="STANFORD"></div>
+        <div class="field"><label>Left player number</label><input id="f-anum" value="${esc(d.cfg.a.num)}" placeholder="8" inputmode="numeric"></div>
+        <div class="field"><label>Left player name</label><input id="f-aname" value="${esc(d.cfg.a.name)}" placeholder="Belardi"></div>
+        <div class="field"><label>Right player number</label><input id="f-bnum" value="${esc(d.cfg.b.num)}" placeholder="88" inputmode="numeric"></div>
+        <div class="field"><label>Right player name</label><input id="f-bname" value="${esc(d.cfg.b.name)}" placeholder="Jackson"></div>
+        <div class="field"><label>Opponent</label><input id="f-oppo" value="${esc(d.cfg.oppo)}" placeholder="UCLA"></div>
+        <div class="field"><label>Opponent pair</label><input id="f-opair" value="${esc(d.cfg.oppPair)}" placeholder="18/21"></div>
+      </div>
+      <div style="display:flex;gap:9px">
+        <button class="ghost" id="cancel" style="flex:1;padding:14px">Cancel</button>
+        <button class="primary" id="savecfg" style="flex:2">${editing?'Save':'Start collecting'}</button>
+      </div></div>`;}
+
+  /* ---- collect ---- */
+  function collect(){
+    return`${bar()}<div class="split">
+      <div class="stage">${stage()}${crumbs()}</div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">${totals()}${logPanel()}</div>
+    </div>${S.sheet==='export'?exportSheet():''}${S.sheet==='sets'?setsSheet():''}`;}
+
+  function bar(){const c=M().cfg;
+    return`<div class="bar">
+      <button class="ghost" id="tolib">Matches</button>
+      <div class="matchup">#${esc(c.a.num)}/#${esc(c.b.num)} <em>vs</em> ${esc(c.oppo||'—')}</div>
+      <div class="spacer"></div>
+      <div class="setsel">${[1,2,3].map(n=>`<button data-set="${n}" class="${S.set===n?'on':''}">Set ${n}</button>`).join('')}</div>
+      <button class="ghost" id="edit">Edit</button>
+      <button class="ghost" id="opensets">Scores</button>
+      <button class="ghost" id="openexport">Export</button></div>`;}
+
+  function stage(){return S.pending?secondBall():passGrid();}
+
+  function passGrid(){
+    const col=k=>{const p=P(k);
+      return`<div class="col"><div class="cap"><b>#${esc(p.num)}</b><span>${esc(p.name||'passes')}</span></div>
+        ${[3,2,1,0].map(n=>`<button class="pass p${n}" data-pass="${k}:${n}">
+          <b>${n}</b><span>${n===3?'perfect':n===2?'medium':n===1?'poor':'aced'}</span></button>`).join('')}</div>`;};
+    return`<div><div class="eyebrow">1st ball</div><h2>Pass</h2></div>
+      <div class="duo">${col('a')}${col('b')}</div>
+      <button class="wide" id="oppmiss">Opponent missed the serve</button>`;}
+
+  function secondBall(){
+    const pk=S.pending.passer,qk=other(pk);
+    const hit=k=>{const p=P(k),isPasser=(k===pk);
+      const head=`<div class="cap on"><b>#${esc(p.num)}</b><span>${isPasser?'3rd ball':'2nd ball'}</span></div>`;
+      const btns=isPasser?
+        `<button class="btn kill" data-out="attack:kill">Kill<small>Point earned</small></button>
+         <button class="btn err"  data-out="attack:error">Error<small>Point given</small></button>
+         <button class="btn dug"  data-out="attack:inplay">Swing, dug<small>Rally continues</small></button>`
+      : `<button class="btn kill" data-out="option:kill">A2 kill<small>Point earned</small></button>
+         <button class="btn err"  data-out="option:error">A2 error<small>Point given</small></button>
+         <button class="btn dug"  data-out="option:inplay">A2, dug<small>Rally continues</small></button>
+         <button class="btn bhe"  data-out="bhe:">Handling error<small>Point given</small></button>`;
+      return`<div class="col">${head}${btns}</div>`;};
+    return`<div><div class="eyebrow">#${esc(P(pk).num)} passed a ${S.pending.rating}</div><h2>2nd / 3rd ball</h2></div>
+      <div class="duo">${hit('a')}${hit('b')}</div>
+      <button class="wide" data-out="none:">No attack — ball stayed in play</button>`;}
+
+  function crumbs(){const m=M(),b=[];
+    if(S.pending){b.push(`<span class="crumb">#${esc(P(S.pending.passer).num)} passed ${S.pending.rating}</span>`);
+      b.push(`<button class="ghost" id="back">Back</button>`);}
+    else{const last=m.rallies[m.rallies.length-1];
+      if(last){b.push(`<span class="crumb dim">${esc(describe(m,last))}</span>`);
+        b.push(`<button class="ghost" id="undo">Undo</button>`);}
+      else b.push(`<span class="crumb dim">No rallies yet</span>`);}
+    return`<div class="crumbs">${b.join('')}</div>`;}
+
+  function statTable(A,B,la,lb){
+    const tot=s=>s.sr.reduce((x,y)=>x+y,0);
+    const r=(n,f,c)=>`<tr class="${c||''}"><td>${n}</td><td class="mono">${f(A)}</td><td class="mono">${f(B)}</td></tr>`;
+    const g=n=>`<tr class="group"><td colspan="3">${n}</td></tr>`;
+    return`<table><thead><tr><th></th><th>${la}</th><th>${lb}</th></tr></thead><tbody>
+      ${g('Serve receive')}${r('Aced (0)',s=>s.sr[0])}${r('Poor (1)',s=>s.sr[1])}
+      ${r('Medium (2)',s=>s.sr[2])}${r('Perfect (3)',s=>s.sr[3])}${r('Total attempts',tot,'tot')}
+      ${g('2nd ball')}${r('Handling errors',s=>s.bhe)}${r('Option attempts',s=>s.a2a)}
+      ${r('Option kills',s=>s.a2k)}${r('Option errors',s=>s.a2e)}
+      ${g('3rd ball')}${r('Swings',s=>s.sw)}${r('Kills',s=>s.fbk)}${r('Errors',s=>s.fbe)}
+      ${g('Points')}${r('Earned (+)',s=>s.pe)}${r('Given (−)',s=>s.pg,'tot')}</tbody></table>`;}
+
+  function totals(){const m=M(),t=tally(m.rallies);
+    return`<div class="panel"><div class="eyebrow">Live totals — this match</div>
+      ${statTable(t.a,t.b,'#'+esc(m.cfg.a.num),'#'+esc(m.cfg.b.num))}</div>`;}
+
+  function logPanel(){const m=M(),rs=[...m.rallies].reverse().slice(0,40);
+    const body=rs.length?rs.map(r=>`<div class="entry"><span class="dot" style="background:${tone(r)}"></span>
+      <span class="txt">${esc(describe(m,r))}</span><span class="set">S${r.set}</span></div>`).join('')
+      :`<div class="empty">Every tap lands here.<br>Check the last few any time you lose the thread.</div>`;
+    return`<div class="panel"><div class="eyebrow">Rally log — ${m.rallies.length} recorded</div>
+      <div class="log">${body}</div></div>`;}
+
+  function setsSheet(){const m=M();
+    return`<div class="modal" data-close="1"><div class="sheet">
+      <h2>Set scores</h2><div class="eyebrow">Typed in — the app only sees receive rallies, so it can't know the score</div>
+      <div class="fields" style="grid-template-columns:1fr 1fr 1fr">
+        ${[0,1,2].map(i=>`<div class="field"><label>Set ${i+1}</label>
+          <input id="sc${i}" value="${esc((m.scores||[])[i]||'')}" placeholder="21-18"></div>`).join('')}</div>
+      <button class="primary" id="savesets">Save scores</button></div></div>`;}
+
+  function exportSheet(){
+    const one=S.view==='collect';
+    const list=one?[M()]:S.matches;
+    return`<div class="modal" data-close="1"><div class="sheet">
+      <h2>Master_Data</h2>
+      <div class="eyebrow">${list.length} match${list.length===1?'':'es'} · ${list.length*2} rows · sheet column order</div>
+      <textarea id="out" readonly>${esc(csv(list))}</textarea>
+      <div style="display:flex;gap:9px">
+        <button class="primary" id="copy" style="flex:1">Copy</button>
+        <button class="primary" id="dl" style="flex:1">Download .csv</button></div>
+      ${one?'':`<button class="ghost" id="backup" style="padding:13px">Download full backup (.json)</button>`}
+      </div></div>`;}
+
+  function seasonSheet(){
+    const rows=seasonRows();
+    const body=rows.length?rows.map(r=>{
+      const t=r.st.sr.reduce((a,b)=>a+b,0);
+      return`<tr><td>${esc(r.num)}${r.name?' '+esc(r.name):''}</td><td class="mono">${r.games}</td>
+        <td class="mono">${t}</td><td class="mono">${r.st.sw}</td><td class="mono">${r.st.fbk}</td>
+        <td class="mono">${r.st.a2a}</td><td class="mono">${r.st.pe}</td><td class="mono">${r.st.pg}</td></tr>`;}).join('')
+      :`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">Nothing matches that filter</td></tr>`;
+    const opt=(v,cur)=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v||'All')}</option>`;
+    return`<div class="modal" data-close="1"><div class="sheet">
+      <h2>Season totals</h2>
+      <div class="fields">
+        <div class="field"><label>Player</label><select id="fp">${opt('',S.filter.player)}${players().map(p=>opt(p,S.filter.player)).join('')}</select></div>
+        <div class="field"><label>Opponent</label><select id="fo">${opt('',S.filter.oppo)}${opponents().map(o=>opt(o,S.filter.oppo)).join('')}</select></div>
+      </div>
+      <table><thead><tr><th>Player</th><th>G</th><th>SR</th><th>Sw</th><th>K</th><th>A2</th><th>+</th><th>−</th></tr></thead>
+      <tbody>${body}</tbody></table>
+      <div class="eyebrow">Raw totals only — ratios come later, from these</div></div></div>`;}
+
+  /* ============================ EVENTS ============================ */
+  function wire(){
+    const on=(s,f)=>$.querySelectorAll(s).forEach(e=>e.addEventListener('click',f));
+    const el=i=>$.querySelector('#'+i);
+    const blankCfg=()=>({date:new Date().toISOString().slice(0,10),school:'',oppo:'',oppPair:'',
+                         a:{num:'',name:''},b:{num:'',name:''}});
+
+    on('[data-close]',e=>{if(e.target===e.currentTarget){S.sheet=null;render();}});
+
+    if(S.view==='library'){
+      el('newmatch').addEventListener('click',()=>{
+        const prev=S.matches[S.matches.length-1];
+        const cfg=blankCfg();
+        if(prev){cfg.school=prev.cfg.school;cfg.a={...prev.cfg.a};cfg.b={...prev.cfg.b};}
+        S.draft={id:null,cfg};S.view='setup';render();});
+      on('[data-open]',e=>{S.cur=e.currentTarget.dataset.open;S.view='collect';S.set=1;S.pending=null;save();render();});
+      on('[data-del]',e=>{const id=e.currentTarget.dataset.del;
+        if(!confirm('Delete this match and its rallies?'))return;
+        S.matches=S.matches.filter(m=>m.id!==id);if(S.cur===id)S.cur=null;save();render();});
+      if(el('season'))el('season').addEventListener('click',()=>{S.sheet='season';render();});
+      if(el('exportall'))el('exportall').addEventListener('click',()=>{S.sheet='export';render();});
+      if(el('fp'))el('fp').addEventListener('change',e=>{S.filter.player=e.target.value;render();});
+      if(el('fo'))el('fo').addEventListener('change',e=>{S.filter.oppo=e.target.value;render();});
+      if(el('backup'))el('backup').addEventListener('click',()=>dl(JSON.stringify(S.matches,null,2),'bvstat-backup.json','application/json'));
+      hookExport(el);
+      return;}
+
+    if(S.view==='setup'){
+      el('cancel').addEventListener('click',()=>{S.view=S.draft.id?'collect':'library';S.draft=null;render();});
+      el('savecfg').addEventListener('click',()=>{
+        const v=i=>(el(i)||{}).value||'';
+        const cfg={date:v('f-date'),school:v('f-school').toUpperCase(),oppo:v('f-oppo').toUpperCase(),
+          oppPair:v('f-opair'),a:{num:v('f-anum'),name:v('f-aname')},b:{num:v('f-bnum'),name:v('f-bname')}};
+        if(!cfg.a.num||!cfg.b.num){alert('Both player numbers are needed — they label every button.');return;}
+        if(S.draft.id){M().cfg=cfg;}
+        else{const m={id:uid(),cfg,scores:['','',''],rallies:[]};S.matches.push(m);S.cur=m.id;S.set=1;}
+        S.draft=null;S.view='collect';save();render();});
+      return;}
+
+    /* collect */
+    el('tolib').addEventListener('click',()=>{S.view='library';S.pending=null;S.sheet=null;render();});
+    el('edit').addEventListener('click',()=>{S.draft={id:S.cur,cfg:JSON.parse(JSON.stringify(M().cfg))};
+      S.view='setup';S.pending=null;render();});
+    on('[data-set]',e=>{S.set=+e.currentTarget.dataset.set;render();});
+    on('[data-pass]',e=>{const[k,n]=e.currentTarget.dataset.pass.split(':');
+      S.pending={kind:'sr',passer:k,rating:+n};
+      if(+n===0)commit({second:null,result:null});else render();});
+    on('[data-out]',e=>{const[sec,res]=e.currentTarget.dataset.out.split(':');
+      commit({second:sec,result:res||null});});
+    if(el('oppmiss'))el('oppmiss').addEventListener('click',()=>{S.pending={kind:'oppServeError'};commit({});});
+    if(el('back'))el('back').addEventListener('click',()=>{S.pending=null;render();});
+    if(el('undo'))el('undo').addEventListener('click',undoLast);
+    if(el('opensets'))el('opensets').addEventListener('click',()=>{S.sheet='sets';render();});
+    if(el('openexport'))el('openexport').addEventListener('click',()=>{S.sheet='export';render();});
+    if(el('savesets'))el('savesets').addEventListener('click',()=>{
+      M().scores=[0,1,2].map(i=>el('sc'+i).value);S.sheet=null;save();render();});
+    hookExport(el);
+  }
+
+  function dl(text,name,type){const b=new Blob([text],{type:type||'text/csv'}),u=URL.createObjectURL(b),
+    a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
+
+  function hookExport(el){
+    if(el('copy'))el('copy').addEventListener('click',()=>{
+      const list=S.view==='collect'?[M()]:S.matches,txt=csv(list);
+      const t=el('out');t.select();t.setSelectionRange(0,99999);
+      try{navigator.clipboard.writeText(txt);}catch(e){document.execCommand('copy');}
+      el('copy').textContent='Copied';});
+    if(el('dl'))el('dl').addEventListener('click',()=>{
+      const one=S.view==='collect',list=one?[M()]:S.matches;
+      const n=one?`${M().cfg.school||'match'}_${M().cfg.date}_${M().cfg.a.num}-${M().cfg.b.num}.csv`:'Master_Data.csv';
+      dl(csv(list),n);});
+  }
+
+  load().then(()=>render());
+})();
+</script>
