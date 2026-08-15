@@ -6,7 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0B1F29">
+<meta name="apple-mobile-web-app-title" content="BV Stats">
 <title>Beach Stat Collector</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png">
 <style>
   :root{
     --ground:#0B1F29; --surface:#12303C; --surface2:#17414F; --line:#2A5A6B;
@@ -909,6 +913,16 @@
   load();
   render();
 })();
+</script>
+
+<script>
+/* Registered separately so a service-worker failure can never stop the
+   collector from running — it degrades to an ordinary online page. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
+  });
+}
 </script>
 </body>
 </html>

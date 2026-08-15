@@ -1,7 +1,7 @@
 # Beach Volleyball Stat Collector — Handoff
 
 **Status:** working prototype, needs storage swap + PWA packaging before deployment
-**Prototype file:** `beach_stat_collector.html` (single file, no build step, no dependencies)
+**Prototype file:** `beach_stat_collector.html` — since renamed to `index.html` so GitHub Pages serves it at the site root (single file, no build step, no dependencies)
 **Audience:** Claude Code, continuing design and implementation
 
 ---

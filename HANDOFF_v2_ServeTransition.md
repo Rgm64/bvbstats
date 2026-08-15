@@ -2,7 +2,7 @@
 
 **Status:** spec finalized with the user, ready to implement
 **Relationship to `HANDOFF.md` (v1):** v1 covers the original architecture, the Serve Receive (SR) tree, and the storage/PWA tasks. **This document supersedes v1 wherever they conflict** (mainly: Master_Data schema, the "dug" outcome wording, per-set tracking, and the storage task's priority). Where v1 is silent — general architecture principles like "event log is the source of truth, aggregates are a pure function of the log," the two-tap philosophy, outdoor/offline/iOS constraints — it still applies and should be read first for context.
-**Prototype file:** `beach_stat_collector.html` (single file, no build step, no dependencies)
+**Prototype file:** `beach_stat_collector.html` — since renamed to `index.html` so GitHub Pages serves it at the site root (single file, no build step, no dependencies)
 **Audience:** Claude Code, continuing implementation from a design conversation with the user
 
 ---
