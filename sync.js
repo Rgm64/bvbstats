@@ -99,12 +99,20 @@
 
   /* Reads `#access_token=...` left by the magic link, stores it, and scrubs the
      fragment so the tokens do not linger in the address bar or history. */
+  /* Returns true on success, or an {error} object when the provider sent one
+     back. Silently ignoring the error fragment leaves the user staring at
+     "Not signed in" with nothing to act on. */
   Client.prototype.adoptRedirect = function () {
     const hash = location.hash || '';
-    if (hash.indexOf('access_token=') < 0) return false;
+    if (hash.indexOf('access_token=') < 0 && hash.indexOf('error') < 0) return false;
     const p = new URLSearchParams(hash.replace(/^#/, ''));
+    if (!p.get('access_token')) {
+      const code = p.get('error_code') || p.get('error') || '';
+      if (!code) return false;
+      history.replaceState(null, '', location.pathname + location.search);
+      return { error: describeAuthError(code, p.get('error_description') || '') };
+    }
     const access = p.get('access_token');
-    if (!access) return false;
     this.setSession({
       access_token: access,
       refresh_token: p.get('refresh_token') || '',
@@ -115,6 +123,22 @@
     history.replaceState(null, '', location.pathname + location.search);
     return true;
   };
+
+  /* Provider error codes are terse. Say what to actually do about them. */
+  function describeAuthError(code, description) {
+    const both = code + ' ' + description;
+    /* Check redirect first: "invalid_request" for a rejected redirect would
+       otherwise be caught by the expiry branch below. */
+    if (/redirect/i.test(both)) {
+      return 'This address is not on the project\'s allowed redirect list.';
+    }
+    if (/expired|already|otp/i.test(both)) {
+      return 'That sign-in link had already been used or had expired. Request a '
+           + 'new one and open the newest email — some mail providers follow links '
+           + 'automatically, which uses them up before you click.';
+    }
+    return description || code || 'Sign-in failed.';
+  }
 
   /* The JWT payload is readable without verifying it — the server verifies on
      every request, so this is only used for display and for stamping a row's

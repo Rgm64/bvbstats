@@ -1069,7 +1069,10 @@
   load();
   /* A magic-link redirect lands back here with tokens in the fragment. */
   if(remote.configured()){
-    try{remote.adoptRedirect();}catch(e){}
+    try{
+      const landed=remote.adoptRedirect();
+      if(landed&&landed.error)S.sync.note=landed.error;
+    }catch(e){}
     S.sync.state=remote.signedIn()?'synced':'signedout';
   }
   render();
