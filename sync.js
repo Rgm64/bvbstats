@@ -82,11 +82,14 @@
      URL fragment, which adoptRedirect() below picks up. */
   Client.prototype.sendMagicLink = function (email) {
     const redirect = location.origin + location.pathname;
-    return fetch(this.url + '/auth/v1/otp', {
+    /* redirect_to is a QUERY parameter on the HTTP API. The nested
+       options.emailRedirectTo form belongs to supabase-js; sent in the body it
+       is silently ignored and the link falls back to the project's Site URL. */
+    const endpoint = this.url + '/auth/v1/otp?redirect_to=' + encodeURIComponent(redirect);
+    return fetch(endpoint, {
       method: 'POST',
       headers: { 'apikey': this.anonKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, create_user: true,
-                             options: { email_redirect_to: redirect } }),
+      body: JSON.stringify({ email: email, create_user: true }),
     }).then(res => res.ok ? { ok: true }
                           : res.json().catch(() => ({})).then(b => ({
                               ok: false,

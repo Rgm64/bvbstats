@@ -14,7 +14,7 @@
    purged on activate) and changes this file's bytes, which is what makes
    the browser notice there is a new worker at all. */
 
-const VERSION = 'v3.1.0';
+const VERSION = 'v3.1.1';
 const CACHE = 'bvstat-' + VERSION;
 const TIMEOUT_MS = 3000;
 
