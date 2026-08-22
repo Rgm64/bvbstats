@@ -97,6 +97,25 @@
                             })));
   };
 
+  /* Google (or any OAuth provider) via Supabase. This is a full-page
+     navigation rather than a fetch: the browser has to visit Google, so there
+     is nothing to await. Supabase sends the browser back with the same
+     `#access_token=...` fragment the magic link uses, which adoptRedirect()
+     below already handles — no separate return path to maintain.
+
+     Nothing is emailed, so this route has no rate limit at all. */
+  Client.prototype.signInWithProvider = function (provider) {
+    const redirect = location.origin + location.pathname;
+    location.href = this.url + '/auth/v1/authorize?provider=' + encodeURIComponent(provider)
+                  + '&redirect_to=' + encodeURIComponent(redirect);
+  };
+
+  Client.prototype.authorizeUrl = function (provider) {
+    const redirect = location.origin + location.pathname;
+    return this.url + '/auth/v1/authorize?provider=' + encodeURIComponent(provider)
+         + '&redirect_to=' + encodeURIComponent(redirect);
+  };
+
   /* Reads `#access_token=...` left by the magic link, stores it, and scrubs the
      fragment so the tokens do not linger in the address bar or history. */
   /* Returns true on success, or an {error} object when the provider sent one

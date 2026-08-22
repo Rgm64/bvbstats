@@ -135,6 +135,8 @@
              font-weight:700;display:flex;gap:11px;align-items:center;line-height:1.35}
   #bv .alert button{flex:none;border:1px solid rgba(255,255,255,.5);background:transparent;color:#FFF0EE;
                     font-weight:800;font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer}
+  #bv details summary::-webkit-details-marker{display:none}
+  #bv details summary{list-style:none}
   #bv .chip{font-size:11px;font-weight:800;letter-spacing:.04em;padding:6px 10px;
              border:1px solid var(--line);border-radius:20px;white-space:nowrap}
   #bv .flash{animation:fl .4s ease}
@@ -652,10 +654,16 @@
       return`<div class="panel">
         <div><div class="eyebrow">Sync</div><h2>Sign in to use every device</h2></div>
         <div class="eyebrow">Matches stay on this device until you sign in. Nothing is lost either way.</div>
-        <div class="field"><label>Email</label>
-          <input type="text" id="si-email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>
-        <button class="primary" id="si-send">Email me a sign-in link</button>
+        <button class="primary" id="si-google">Continue with Google</button>
         ${S.sync.note?`<div class="eyebrow" style="color:#E9A49E">${esc(S.sync.note)}</div>`:''}
+        <details>
+          <summary class="eyebrow" style="cursor:pointer;padding:6px 0">Sign in by email instead</summary>
+          <div style="display:flex;flex-direction:column;gap:9px;padding-top:9px">
+            <div class="field"><label>Email</label>
+              <input type="text" id="si-email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>
+            <button class="ghost" id="si-send" style="padding:13px">Email me a sign-in link</button>
+          </div>
+        </details>
       </div>`;}
     return`<div class="panel" style="gap:9px">
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
@@ -945,6 +953,9 @@
       if(el('backup'))el('backup').addEventListener('click',()=>dl(
         JSON.stringify({schemaVersion:SCHEMA,matches:S.matches,cur:S.cur},null,2),
         'bvstat-backup-'+new Date().toISOString().slice(0,10)+'.json','application/json'));
+      if(el('si-google'))el('si-google').addEventListener('click',()=>{
+        S.sync.note='Opening Google…';render();
+        remote.signInWithProvider('google');});
       if(el('si-send'))el('si-send').addEventListener('click',()=>{
         const addr=(el('si-email').value||'').trim();
         if(!addr){S.sync.note='Enter your email first.';render();return;}
