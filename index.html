@@ -135,6 +135,8 @@
              font-weight:700;display:flex;gap:11px;align-items:center;line-height:1.35}
   #bv .alert button{flex:none;border:1px solid rgba(255,255,255,.5);background:transparent;color:#FFF0EE;
                     font-weight:800;font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer}
+  #bv .chip{font-size:11px;font-weight:800;letter-spacing:.04em;padding:6px 10px;
+             border:1px solid var(--line);border-radius:20px;white-space:nowrap}
   #bv .flash{animation:fl .4s ease}
   @keyframes fl{0%{background:var(--sand)}100%{background:var(--surface)}}
   @media(prefers-reduced-motion:reduce){#bv *{animation:none!important;transition:none!important}}
@@ -143,22 +145,30 @@
 <body>
 <div id="bv"></div>
 
+<script src="./config.js"></script>
+<script src="./sync.js"></script>
+
 <script>
 (function(){
   const $=document.getElementById('bv');
   const uid=()=>Math.random().toString(36).slice(2,10);
 
   const S={matches:[],cur:null,view:'library',screen:'sr1',pending:null,sheet:null,draft:null,
-           filter:{player:'',oppo:''},err:null};
+           filter:{player:'',oppo:''},err:null,
+           sync:{state:'local',pending:0,busy:false,note:null}};
+
+  /* Sync is layered on top of local storage and is never on the critical path
+     of recording a rally — see sync.js. */
+  const remote=new BVSync.Client(window.BV_CONFIG||{});
 
   /* ============================ STORAGE ============================
      v1 persisted through window.storage, which exists only inside the
      artifact runtime and silently no-ops anywhere else. localStorage is
      synchronous, so the write lands before the tap handler returns —
      a force-quit right after a tap cannot lose the rally.            */
-  const KEY='bvstat:v2', PREV='bvstat:v2:prev', SCHEMA=2;
+  const KEY='bvstat:v2', PREV='bvstat:v2:prev', SCHEMA=3;
 
-  function save(){
+  function writeLocal(){
     let blob;
     try{blob=JSON.stringify({schemaVersion:SCHEMA,matches:S.matches,cur:S.cur});}
     catch(e){S.err='Could not serialize match data: '+e.message;return false;}
@@ -176,6 +186,8 @@
       return false;
     }
   }
+
+  function save(){const okv=writeLocal();syncSoon();return okv;}
 
   function load(){
     let raw=null;
@@ -202,6 +214,9 @@
     const c=m.cfg||{};
     return{
       id:m.id||uid(),
+      updatedAt:Number(m.updatedAt)||0,      // epoch ms; drives last-write-wins
+      owner:m.owner||null,
+      deleted:!!m.deleted,                   // tombstone, so a delete cannot resurrect
       cfg:{date:c.date||'',school:c.school||'',oppo:c.oppo||'',oppPair:c.oppPair||'',
            trackST:!!c.trackST,
            a:{num:(c.a&&c.a.num)||'',name:(c.a&&c.a.name)||''},
@@ -216,6 +231,10 @@
   }
 
   const M=()=>S.matches.find(m=>m.id===S.cur);
+  const live=()=>S.matches.filter(m=>!m.deleted);
+  /* Stamp a match as changed on this device. Every mutation goes through here
+     so the merge always has an honest timestamp to compare. */
+  const touch=m=>{if(m)m.updatedAt=Date.now();return m;};
   const other=k=>k==='a'?'b':'a';
   const P=k=>M().cfg[k];
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -362,13 +381,34 @@
     return[HEAD,...body].map(r=>r.map(q).join(',')).join('\n');
   }
 
+  /* Column keys for match_stats, in the exact order matchRows() emits them.
+     Kept adjacent to HEAD so the two cannot drift apart unnoticed. */
+  const STAT_COLS=['played_on','school','pair','player','partner','opponent','opponent_pair',
+    'final_score','sets_won','sets_lost','points_earned','points_given','sr_total_attempts',
+    'sr_0','sr_1','sr_2','sr_3','sr_bhe','sr_a2_attempts','sr_a2_kills','sr_a2_errors',
+    'sr_fb_swings','sr_fb_kills','sr_fb_errors','sr_bhe_partner','sr_a2_attempts_partner',
+    'sr_a2_kills_partner','sr_a2_errors_partner','serve_attempts','aces','serving_errors',
+    'knockouts','points_on_serve','stuff_blocks','tools','digs_to_swing','digs',
+    'transition_bhe','transition_a2_kills','transition_a2_errors','transition_kills',
+    'transition_hitting_errors','transition_bhe_partner','transition_a2_kills_partner',
+    'transition_a2_errors_partner'];
+
+  function statRows(m){
+    return matchRows(m).map((row,i)=>{
+      const o={match_id:m.id,slot:i===0?'a':'b'};
+      STAT_COLS.forEach((k,j)=>{o[k]=row[j];});
+      o.played_on=o.played_on||null;          // an empty string is not a date
+      return o;
+    });
+  }
+
   /* ============ season filter ============ */
-  function players(){const s=new Set();S.matches.forEach(m=>['a','b'].forEach(k=>{
+  function players(){const s=new Set();live().forEach(m=>['a','b'].forEach(k=>{
     if(m.cfg[k].num)s.add('#'+m.cfg[k].num);}));return[...s];}
-  function opponents(){const s=new Set();S.matches.forEach(m=>{if(m.cfg.oppo)s.add(m.cfg.oppo);});return[...s];}
+  function opponents(){const s=new Set();live().forEach(m=>{if(m.cfg.oppo)s.add(m.cfg.oppo);});return[...s];}
   function seasonRows(){
     const f=S.filter,acc={};
-    S.matches.forEach(m=>{
+    live().forEach(m=>{
       if(f.oppo&&m.cfg.oppo!==f.oppo)return;
       const t=tally(m.rallies);
       ['a','b'].forEach(k=>{const num='#'+m.cfg[k].num;
@@ -377,6 +417,75 @@
         if(!acc[key])acc[key]={num,name:m.cfg[k].name,games:0,st:blank()};
         acc[key].games++;add(acc[key].st,t[k]);});});
     return Object.values(acc).sort((x,y)=>srTotal(y.st)-srTotal(x.st));}
+
+  /* ============================ SYNC ============================
+     Local storage is always written first and never waits on the network.
+     Everything here is best-effort reconciliation on top of that. */
+  let syncTimer=null;
+
+  function syncSoon(){
+    if(!remote.configured()||!remote.signedIn())return;
+    clearTimeout(syncTimer);
+    syncTimer=setTimeout(()=>syncNow(true),4000);
+  }
+
+  function syncNow(quiet){
+    if(!remote.configured()){S.sync.state='local';S.sync.pending=0;if(!quiet)render();return Promise.resolve();}
+    if(!remote.signedIn()){S.sync.state='signedout';S.sync.pending=0;if(!quiet)render();return Promise.resolve();}
+    clearTimeout(syncTimer);
+    S.sync.busy=true;if(!quiet)render();
+    return remote.sync(S.matches,statRows).then(res=>{
+      S.sync.busy=false;
+      S.sync.state=res.state;
+      S.sync.pending=res.pending||0;
+      S.sync.note=res.error||null;
+      if(res.matches&&res.matches!==S.matches){
+        let next=res.matches;
+        /* Last-write-wins already protects local work, because an unsynced
+           edit carries a newer timestamp than anything the server has. The
+           one case it does not cover is a true conflict: the server is newer
+           AND this device has unpushed changes to the same match. Mid-
+           collection, keep what is in front of the collector rather than
+           letting rallies vanish under them. */
+        if(S.view==='collect'&&S.cur){
+          const mine=S.matches.find(m=>m.id===S.cur);
+          const theirs=next.find(m=>m.id===S.cur);
+          if(mine&&theirs&&theirs!==mine&&remote.pending([mine]).length)
+            next=next.map(m=>m.id===S.cur?mine:m);
+        }
+        S.matches=next;
+        /* The open match may have been deleted on another device. */
+        if(S.cur&&(!M()||M().deleted)){S.cur=null;S.pending=null;S.view='library';}
+        writeLocal();
+      }
+      render();
+    }).catch(e=>{
+      S.sync.busy=false;S.sync.state='offline';S.sync.note=String(e&&e.message||e);
+      S.sync.pending=remote.pending(S.matches).length;render();
+    });
+  }
+
+  /* Counted live rather than cached, so the chip is honest the instant a
+     rally is recorded rather than only after the next sync attempt. */
+  function pendingCount(){
+    if(!remote.configured()||!remote.signedIn())return 0;
+    return remote.pending(S.matches).length;
+  }
+  function syncLabel(){
+    const y=S.sync,p=pendingCount();
+    if(y.busy)return'Syncing…';
+    if(y.state==='local')return'On this device';
+    if(y.state==='signedout')return'Not signed in';
+    if(y.state==='offline')return p?('Offline — '+p+' to sync'):'Offline';
+    return p?(p+' to sync'):'Synced';
+  }
+  function syncTone(){
+    const y=S.sync;
+    if(y.busy)return'var(--sand)';
+    if(y.state==='offline')return'var(--q1)';
+    if(y.state==='synced'&&!pendingCount())return'var(--kill)';
+    return'var(--muted)';
+  }
 
   /* ============================ ROUTING ============================
      Which side of the ball does the next rally start on? Derived from
@@ -413,6 +522,7 @@
   function commit(rally){
     const m=M();
     m.rallies.push(rally);
+    touch(m);
     S.pending=null;
     S.screen=screenFor(m);
     save();
@@ -428,6 +538,7 @@
     const m=M();
     if(!m.rallies.length)return;
     m.rallies.pop();
+    touch(m);
     S.pending=null;
     S.screen=screenFor(m);
     save();
@@ -507,7 +618,8 @@
 
   /* ---- library ---- */
   function library(){
-    const cards=S.matches.length?S.matches.map(m=>{
+    const shown=live();
+    const cards=shown.length?shown.map(m=>{
       const n=m.rallies.length,c=m.cfg;
       return`<div class="card ${m.id===S.cur?'on':''}">
         <div class="who"><b>${esc(c.a.num?'#'+c.a.num:'?')}/${esc(c.b.num||'?')} vs ${esc(c.oppo||'—')}</b>
@@ -515,21 +627,48 @@
         <button class="ghost" data-open="${m.id}">Open</button>
         <button class="ghost warn" data-del="${m.id}">Delete</button></div>`;}).join('')
       :`<div class="empty">No matches yet.<br>Start one and it stays here for the season.</div>`;
-    return`${alertBar()}<div class="panel">
+    return`${alertBar()}${account()}<div class="panel">
       <div><div class="eyebrow">Beach volleyball</div><h2>Matches</h2></div>
       ${cards}
       <button class="primary" id="newmatch">New match</button>
       <div class="pair">
-        ${S.matches.length?`<button class="ghost" id="season" style="padding:13px">Season totals</button>
+        ${shown.length?`<button class="ghost" id="season" style="padding:13px">Season totals</button>
         <button class="ghost" id="exportall" style="padding:13px">Export spreadsheet</button>`:''}
       </div>
       <div class="pair">
-        ${S.matches.length?`<button class="ghost" id="backup" style="padding:13px">Download backup</button>`:''}
+        ${shown.length?`<button class="ghost" id="backup" style="padding:13px">Download backup</button>`:''}
         <button class="ghost" id="restore" style="padding:13px">Import backup</button>
       </div>
       <input type="file" id="restorefile" accept="application/json,.json" style="display:none">
     </div>
     ${S.sheet==='season'?seasonSheet():''}${S.sheet==='export'?exportSheet():''}`;}
+
+  /* Signing in is optional. With no project configured, or signed out, the
+     app is exactly what it was: fully working, stored on this device. */
+  function account(){
+    if(!remote.configured())return'';
+    const chip=`<span class="chip" style="color:${syncTone()}">${esc(syncLabel())}</span>`;
+    if(!remote.signedIn()){
+      return`<div class="panel">
+        <div><div class="eyebrow">Sync</div><h2>Sign in to use every device</h2></div>
+        <div class="eyebrow">Matches stay on this device until you sign in. Nothing is lost either way.</div>
+        <div class="field"><label>Email</label>
+          <input type="text" id="si-email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>
+        <button class="primary" id="si-send">Email me a sign-in link</button>
+        ${S.sync.note?`<div class="eyebrow" style="color:#E9A49E">${esc(S.sync.note)}</div>`:''}
+      </div>`;}
+    return`<div class="panel" style="gap:9px">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div class="eyebrow">Signed in</div>
+          <b style="font-size:14px">${esc(remote.email()||'')}</b>
+        </div>
+        ${chip}
+        <button class="ghost" id="si-sync">Sync now</button>
+        <button class="ghost" id="si-out">Sign out</button>
+      </div>
+      ${S.sync.note?`<div class="eyebrow" style="color:#E9A49E">${esc(S.sync.note)}</div>`:''}
+    </div>`;}
 
   /* ---- setup (also used for editing) ---- */
   function setup(){
@@ -571,7 +710,9 @@
       <div class="spacer"></div>
       <button class="ghost" id="edit">Edit</button>
       <button class="ghost" id="openexport">Export</button>
-      <button class="ghost" id="endmatch">End match</button></div>`;}
+      <button class="ghost" id="endmatch">End match</button>
+      ${remote.configured()?`<span class="chip" style="color:${syncTone()}">${esc(syncLabel())}</span>`:''}
+      </div>`;}
 
   function stage(){
     switch(S.screen){
@@ -744,7 +885,7 @@
 
   function exportSheet(){
     const one=S.view==='collect'||S.view==='end';
-    const list=one?[M()]:S.matches;
+    const list=one?[M()]:live();
     return`<div class="modal" data-close="1"><div class="sheet">
       <h2>Master_Data</h2>
       <div class="eyebrow">${list.length} match${list.length===1?'':'es'} · ${list.length*2} rows · ${HEAD.length} columns</div>
@@ -785,7 +926,7 @@
 
     if(S.view==='library'){
       el('newmatch').addEventListener('click',()=>{
-        const prev=S.matches[S.matches.length-1];
+        const prev=live()[live().length-1];
         const cfg=blankCfg();
         if(prev){cfg.school=prev.cfg.school;cfg.a={...prev.cfg.a};cfg.b={...prev.cfg.b};
                  cfg.trackST=!!prev.cfg.trackST;}
@@ -794,7 +935,9 @@
         S.screen=screenFor(M());save();render();});
       on('[data-del]',e=>{const id=e.currentTarget.dataset.del;
         if(!confirm('Delete this match and its rallies?'))return;
-        S.matches=S.matches.filter(m=>m.id!==id);if(S.cur===id)S.cur=null;save();render();});
+        const m=S.matches.find(x=>x.id===id);
+        if(m){m.deleted=true;m.rallies=[];touch(m);}   // tombstone, not a removal
+        if(S.cur===id)S.cur=null;save();syncSoon();render();});
       if(el('season'))el('season').addEventListener('click',()=>{S.sheet='season';render();});
       if(el('exportall'))el('exportall').addEventListener('click',()=>{S.sheet='export';render();});
       if(el('fp'))el('fp').addEventListener('change',e=>{S.filter.player=e.target.value;render();});
@@ -802,6 +945,17 @@
       if(el('backup'))el('backup').addEventListener('click',()=>dl(
         JSON.stringify({schemaVersion:SCHEMA,matches:S.matches,cur:S.cur},null,2),
         'bvstat-backup-'+new Date().toISOString().slice(0,10)+'.json','application/json'));
+      if(el('si-send'))el('si-send').addEventListener('click',()=>{
+        const addr=(el('si-email').value||'').trim();
+        if(!addr){S.sync.note='Enter your email first.';render();return;}
+        S.sync.note='Sending…';render();
+        remote.sendMagicLink(addr).then(r=>{
+          S.sync.note=r.ok?('Check '+addr+' for the link. Open it on this device.'):r.error;
+          render();});});
+      if(el('si-sync'))el('si-sync').addEventListener('click',()=>syncNow());
+      if(el('si-out'))el('si-out').addEventListener('click',()=>{
+        if(!confirm('Sign out? Matches stay on this device.'))return;
+        remote.signOut();S.sync.state='signedout';S.sync.pending=0;S.sync.note=null;render();});
       if(el('restore'))el('restore').addEventListener('click',()=>el('restorefile').click());
       if(el('restorefile'))el('restorefile').addEventListener('change',e=>{
         const f=e.target.files&&e.target.files[0];if(!f)return;
@@ -826,8 +980,9 @@
           oppPair:v('f-opair'),trackST:!!(el('f-st')&&el('f-st').checked),
           a:{num:v('f-anum'),name:v('f-aname')},b:{num:v('f-bnum'),name:v('f-bname')}};
         if(!cfg.a.num||!cfg.b.num){alert('Both player numbers are needed — they label every button.');return;}
-        if(S.draft.id){M().cfg=cfg;S.screen=screenFor(M());}
-        else{const m={id:uid(),cfg,scores:['','',''],won:false,rallies:[]};
+        if(S.draft.id){M().cfg=cfg;touch(M());S.screen=screenFor(M());}
+        else{const m={id:uid(),cfg,scores:['','',''],won:false,rallies:[],
+                      updatedAt:Date.now(),owner:null,deleted:false};
              S.matches.push(m);S.cur=m.id;S.screen=screenFor(m);}
         S.pending=null;S.draft=null;S.view='collect';save();render();});
       return;}
@@ -838,11 +993,11 @@
         const m=M();
         m.scores=[0,1,2].map(i=>el('sc'+i).value);
         m.won=!!el('f-won').checked;
-        save();S.view='library';S.pending=null;render();});
+        touch(m);save();syncNow();S.view='library';S.pending=null;render();});
       [0,1,2].forEach(i=>{const f=el('sc'+i);if(f)f.addEventListener('input',()=>{
-        M().scores=[0,1,2].map(j=>el('sc'+j).value);M().won=!!el('f-won').checked;save();});});
+        M().scores=[0,1,2].map(j=>el('sc'+j).value);M().won=!!el('f-won').checked;touch(M());save();});});
       if(el('f-won'))el('f-won').addEventListener('change',()=>{
-        M().scores=[0,1,2].map(j=>el('sc'+j).value);M().won=!!el('f-won').checked;save();render();});
+        M().scores=[0,1,2].map(j=>el('sc'+j).value);M().won=!!el('f-won').checked;touch(M());save();render();});
       return;}
 
     /* ---- collect ---- */
@@ -896,22 +1051,30 @@
 
   function hookExport(el){
     if(el('copy'))el('copy').addEventListener('click',()=>{
-      const list=(S.view==='collect'||S.view==='end')?[M()]:S.matches,txt=csv(list);
+      const list=(S.view==='collect'||S.view==='end')?[M()]:live(),txt=csv(list);
       const t=el('out');t.select();t.setSelectionRange(0,99999);
       try{navigator.clipboard.writeText(txt);}catch(e){document.execCommand('copy');}
       el('copy').textContent='Copied';});
     if(el('dl'))el('dl').addEventListener('click',()=>{
-      const one=S.view==='collect'||S.view==='end',list=one?[M()]:S.matches;
+      const one=S.view==='collect'||S.view==='end',list=one?[M()]:live();
       const n=one?`${M().cfg.school||'match'}_${M().cfg.date}_${M().cfg.a.num}-${M().cfg.b.num}.csv`:'Master_Data.csv';
       dl(csv(list),n);});
   }
 
   /* Exposed for the automated verification harness — not used by the UI. */
-  window.BV={tally,matchRows,csv,record,HEAD,srStats,outcomeOf,blank,add,srTotal,
+  window.BV={tally,matchRows,csv,record,HEAD,srStats,outcomeOf,blank,add,srTotal,pendingCount,
+             statRows,STAT_COLS,live,touch,remote,syncNow,SCHEMA,
              state:S,render,save,load};
 
   load();
+  /* A magic-link redirect lands back here with tokens in the fragment. */
+  if(remote.configured()){
+    try{remote.adoptRedirect();}catch(e){}
+    S.sync.state=remote.signedIn()?'synced':'signedout';
+  }
   render();
+  if(remote.configured()&&remote.signedIn())syncNow(true);
+  window.addEventListener('online',()=>syncNow(true));
 })();
 </script>
 

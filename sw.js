@@ -14,13 +14,15 @@
    purged on activate) and changes this file's bytes, which is what makes
    the browser notice there is a new worker at all. */
 
-const VERSION = 'v2.0.0';
+const VERSION = 'v3.0.0';
 const CACHE = 'bvstat-' + VERSION;
 const TIMEOUT_MS = 3000;
 
 const SHELL = [
   './',
   './index.html',
+  './config.js',
+  './sync.js',
   './manifest.json',
   './apple-touch-icon.png',
   './icon-192.png',
